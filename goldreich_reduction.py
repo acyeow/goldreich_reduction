@@ -76,6 +76,21 @@ def main():
     plt.subplot(2, 2, 1)
     plt.bar(range(n), p)
     plt.title("Original Distribution p")
+
+    plt.subplot(2, 2, 2)
+    plt.bar(range(n), q)
+    plt.title("Original Distribution q")
+
+    plt.subplot(2, 2, 3)
+    plt.bar(range(n + 1), p_double_prime)
+    plt.title("Reduced Distribution p_double_prime")
+
+    plt.subplot(2, 2, 4)
+    plt.bar(range(n + 1), q_double_prime)
+    plt.title("Reduced Distribution q_double_prime")
+
+    plt.tight_layout()
+    plt.show()
     
 if __name__ == "__main__":
     main()
