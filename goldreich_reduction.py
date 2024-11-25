@@ -46,7 +46,7 @@ def reduce_to_O_n_grained(p, q, gamma, n):
 
 def main():
     # Define parameters
-    n = 10
+    n = 20
     gamma = 0.1
 
     # Generate random distributions p and q
