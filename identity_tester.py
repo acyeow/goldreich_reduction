@@ -46,9 +46,7 @@ def identity_tester(samples: List[int], q: Dict[int, float], epsilon: float) -> 
     
     return Z <= threshold
 
-# Example usage
-def test_identity_tester():
-    # Example known distribution q
+def main():
     q = {
         0: 0.25,
         1: 0.25,
@@ -56,16 +54,14 @@ def test_identity_tester():
         3: 0.25
     }
     
-    # Generate synthetic samples from a distribution
-    # In this case, we'll generate samples from q to test the "equal" case
     np.random.seed(42)
     samples = np.random.choice(list(q.keys()), size=1000, p=list(q.values())).tolist()
     
-    # Test with epsilon = 0.1
     epsilon = 0.1
     result = identity_tester(samples, q, epsilon)
     
-    # Plot the known distribution q
+    print(f"Identity tester result: {'Accepted' if result else 'Rejected'}")
+    
     plt.figure(figsize=(12, 6))
     
     plt.subplot(1, 2, 1)
@@ -74,7 +70,6 @@ def test_identity_tester():
     plt.xlabel("Value")
     plt.ylabel("Probability")
     
-    # Plot the histogram of the samples
     plt.subplot(1, 2, 2)
     plt.hist(samples, bins=len(q), density=True, alpha=0.7, color='green', edgecolor='black')
     plt.title("Histogram of Generated Samples")
@@ -86,7 +81,5 @@ def test_identity_tester():
     
     return result
 
-# Run test
 if __name__ == "__main__":
-    result = test_identity_tester()
-    print(f"Test result (True means distributions are considered equal): {result}")
+    main()

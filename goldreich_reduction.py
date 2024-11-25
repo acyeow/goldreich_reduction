@@ -45,52 +45,53 @@ def reduce_to_O_n_grained(p, q, gamma, n):
     return p_double_prime, q_double_prime
 
 def main():
-    # Define parameters
     n = 20
     gamma = 0.1
 
-    # Generate random distributions p and q
     p = [random.random() for _ in range(n)]
     q = [random.random() for _ in range(n)]
 
-    # Normalize p and q to make them valid probability distributions
     p = [p_i / sum(p) for p_i in p]
     q = [q_i / sum(q) for q_i in q]
 
-    # Print the original distributions
     print("Original distributions:")
     print("p:", p)
     print("q:", q)
 
-    # Apply the reduction
     p_double_prime, q_double_prime = reduce_to_O_n_grained(p, q, gamma, n)
 
-    # Print the reduced distributions
     print("\nReduced distributions:")
     print("p_double_prime:", p_double_prime)
     print("q_double_prime:", q_double_prime)
 
-    # Plot the distributions
     plt.figure(figsize=(12, 6))
 
     plt.subplot(2, 2, 1)
-    plt.bar(range(n), p)
+    plt.bar(range(n), p, color='blue', alpha=0.7)
     plt.title("Original Distribution p")
+    plt.xlabel("Value")
+    plt.ylabel("Probability")
 
     plt.subplot(2, 2, 2)
-    plt.bar(range(n), q)
+    plt.bar(range(n), q, color='blue', alpha=0.7)
     plt.title("Original Distribution q")
+    plt.xlabel("Value")
+    plt.ylabel("Probability")
 
     plt.subplot(2, 2, 3)
-    plt.bar(range(n + 1), p_double_prime)
+    plt.bar(range(n + 1), p_double_prime, color='green', alpha=0.7)
     plt.title("Reduced Distribution p_double_prime")
+    plt.xlabel("Value")
+    plt.ylabel("Probability")
 
     plt.subplot(2, 2, 4)
-    plt.bar(range(n + 1), q_double_prime)
+    plt.bar(range(n + 1), q_double_prime, color='green', alpha=0.7)
     plt.title("Reduced Distribution q_double_prime")
+    plt.xlabel("Value")
+    plt.ylabel("Probability")
 
     plt.tight_layout()
     plt.show()
-    
+
 if __name__ == "__main__":
     main()
