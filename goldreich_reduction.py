@@ -5,6 +5,13 @@ import matplotlib.pyplot as plt
 def F_prime(i, n):
     """
     The filter F' that outputs i with probability 1/2, and the uniform distribution on [n] otherwise.
+
+    Parameters:
+    i (int): The input value.
+    n (int): The range of the uniform distribution [1, n].
+
+    Returns:
+    int: The filtered value.
     """
     if random.random() < 0.5:
         return i
@@ -15,6 +22,15 @@ def F_double_prime_q_prime(i, q_prime, gamma, n):
     """
     The filter F''_q' that outputs i with probability m_i * gamma / n, where m_i = floor(q'(i) * n / gamma),
     and outputs n+1 otherwise.
+
+    Parameters:
+    i (int): The input value.
+    q_prime (list): The modified distribution q'.
+    gamma (float): The gamma parameter.
+    n (int): The range of the uniform distribution [1, n].
+
+    Returns:
+    int: The filtered value.
     """
     m_i = math.floor(q_prime[i] * n / gamma)
     if random.random() < m_i * gamma / n:
@@ -26,6 +42,15 @@ def reduce_to_O_n_grained(p, q, gamma, n):
     """
     Implement the algorithm proposed in the paper to reduce testing equality to a general distribution
     to testing equality to a O(n)-grained distribution.
+
+    Parameters:
+    p (list): The original distribution p.
+    q (list): The original distribution q.
+    gamma (float): The gamma parameter.
+    n (int): The number of elements in the distributions.
+
+    Returns:
+    tuple: The reduced distributions p'' and q''.
     """
     # Step 1: Apply filter F'
     p_prime = [0.5 * p[i] + 0.5 / n for i in range(n)]
