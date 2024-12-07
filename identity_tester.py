@@ -62,6 +62,10 @@ def main():
     
     print(f"Identity tester result: {'Accepted' if result else 'Rejected'}")
     
+    # Calculate the frequency of each sample
+    sample_counts = {i: samples.count(i) for i in q.keys()}
+    sample_frequencies = {i: count / len(samples) for i, count in sample_counts.items()}
+    
     plt.figure(figsize=(12, 6))
     
     plt.subplot(1, 2, 1)
@@ -71,8 +75,10 @@ def main():
     plt.ylabel("Probability")
     
     plt.subplot(1, 2, 2)
-    plt.hist(samples, bins=len(q), density=True, alpha=0.7, color='green', edgecolor='black')
-    plt.title("Histogram of Generated Samples")
+    # plt.hist(samples, bins=len(q), density=True, alpha=0.7, color='green', edgecolor='black')
+    # plt.title("Histogram of Generated Samples")
+    plt.bar(sample_frequencies.keys(), sample_frequencies.values(), width=0.4, color='green', alpha=0.7)
+    plt.title("Bar Plot of Generated Samples")
     plt.xlabel("Value")
     plt.ylabel("Frequency")
     
