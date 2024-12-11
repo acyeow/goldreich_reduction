@@ -1,10 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+from generate_test_distributions import generate_far_exact_distribution, generate_bimodal_distribution, generate_normal_distribution, generate_exponential_distribution
 
 def collision_tester(p: np.ndarray, m: int, epsilon: float) -> bool:
     """
-    Implements the CollisionTester algorithm from Lecture 13.
+    Implements the CollisionTester algorithm from Lecture 11.
 
     Parameters:
     p (np.ndarray): The distribution over [n] from which to draw samples.
@@ -14,8 +15,7 @@ def collision_tester(p: np.ndarray, m: int, epsilon: float) -> bool:
     Returns:
     bool: True if the distribution p is accepted, False otherwise.
     """
-    if 2 > m:
-        raise ValueError("m must be at least 2.")
+    
     # Step 1: Take m samples x1, ..., xm drawn i.i.d. from p
     samples = np.random.choice(len(p), size=m, replace=True, p=p)
 
@@ -23,8 +23,8 @@ def collision_tester(p: np.ndarray, m: int, epsilon: float) -> bool:
     Yij = np.sum([samples[i] == samples[j] for i in range(m) for j in range(i+1, m)])
     C = Yij / math.comb(m, 2)
 
-    # Step 3: Accept if and only if C <= 1 + 0.01 * sqrt(n)
-    return C <= 1 + 0.01 * epsilon**2 / len(p)
+    # Step 3: Accept if and only if C ≤ 1 + ε^2 / m
+    return C <= 1 + epsilon**2 / len(p)
 
 def test_collision_tester(p: np.ndarray, m: int, epsilon: float):
     """
@@ -62,13 +62,26 @@ def test_collision_tester(p: np.ndarray, m: int, epsilon: float):
     plt.show()
 
 def main():
-    # Test with a variety of distributions
+    # Generate distributions
+    n = 100
+    far_exact_dist = generate_far_exact_distribution(n)
+    bimodal_dist = generate_bimodal_distribution(n)
+    normal_dist = generate_normal_distribution(n)
+    exponential_dist = generate_exponential_distribution(n)
+
+    # Normalize the distributions to sum to 1
+    far_exact_dist /= np.sum(far_exact_dist)
+    bimodal_dist /= np.sum(bimodal_dist)
+    normal_dist /= np.sum(normal_dist)
+    exponential_dist /= np.sum(exponential_dist)
+
     distributions = [
-        np.random.dirichlet(np.ones(10), size=1)[0],
-        np.random.dirichlet(np.ones(10) * 2, size=1)[0],
-        np.random.dirichlet(np.ones(10) * 3, size=1)[0]
+        far_exact_dist,
+        bimodal_dist,
+        normal_dist,
+        exponential_dist
     ]
-    m = 100
+    m = 1000
     epsilon = 0.1
 
     for i, p in enumerate(distributions):
