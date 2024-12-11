@@ -1,9 +1,16 @@
 import numpy as np
+import os
 import math
 import random
 from typing import Dict, List, Tuple
 from scipy.stats import chi2
 import matplotlib.pyplot as plt
+from generate_test_distributions import (
+    generate_far_exact_distribution,
+    generate_bimodal_distribution,
+    generate_normal_distribution,
+    generate_exponential_distribution
+)
 
 def F_prime(samples: List[int], n: int) -> List[int]:
     """
@@ -103,37 +110,14 @@ def transform_samples_to_grained(p_prime_samples: List[int], q_prime: Dict[str, 
 
     return p_grained_samples
 
-def epsilon_tester_uniformity(samples: List[int], m: int, epsilon: float) -> bool:
-    """
-    Epsilon tester for uniformity over [m].
-
-    Parameters:
-    samples (List[int]): List of samples.
-    m (int): The parameter m for uniformity.
-    epsilon (float): The accuracy parameter.
-
-    Returns:
-    bool: True if the samples are uniformly distributed, False otherwise.
-    """
-    expected_count = len(samples) / m
-    counts = [samples.count(i) for i in range(1, m + 1)]
-    chi_square_stat = sum((count - expected_count) ** 2 / expected_count for count in counts)
-    threshold = chi2.ppf(1 - epsilon, df=m - 1)
-    
-    # Print the decision threshold
-    print(f"Computed chi-square statistic: {chi_square_stat}")
-    print(f"Decision threshold: {threshold}")
-    
-    return chi_square_stat <= threshold
-
-def reduce_to_O_n_grained(p: np.ndarray, q: np.ndarray, gamma: float, n: int) -> Tuple[List[float], Dict[str, float]]:
+def reduce_to_O_n_grained(p: np.ndarray, q: Dict[str, float], gamma: float, n: int) -> Tuple[List[float], Dict[str, float]]:
     """
     Implement the algorithm proposed in the paper to reduce testing equality to a general distribution
     to testing equality to a O(n)-grained distribution.
 
     Parameters:
     p (np.ndarray): The original distribution p.
-    q (np.ndarray): The original distribution q.
+    q (Dict[str, float]): The original distribution q.
     gamma (float): The gamma parameter.
     n (int): The number of elements in the distributions.
 
@@ -157,21 +141,43 @@ def reduce_to_O_n_grained(p: np.ndarray, q: np.ndarray, gamma: float, n: int) ->
 
     return p_double_prime, q_double_prime
 
-def algorithm_8(p: np.ndarray, q: np.ndarray, epsilon: float, n: int) -> bool:
+def epsilon_tester_uniformity(samples: List[int], m: int, epsilon: float) -> bool:
+    """
+    Epsilon tester for uniformity over [m].
+
+    Parameters:
+    samples (List[int]): List of samples.
+    m (int): The parameter m for uniformity.
+    epsilon (float): The accuracy parameter.
+
+    Returns:
+    bool: True if the samples are uniformly distributed, False otherwise.
+    """
+    expected_count = len(samples) / m
+    counts = [samples.count(i) for i in range(1, m + 1)]
+    chi_square_stat = sum((count - expected_count) ** 2 / expected_count for count in counts)
+    threshold = chi2.ppf(1 - epsilon, df=m - 1)
+    
+    # Print the decision threshold
+    print(f"Computed chi-square statistic: {chi_square_stat}")
+    print(f"Decision threshold: {threshold}")
+    
+    return chi_square_stat <= threshold
+
+def algorithm_8(p: np.ndarray, q: np.ndarray, epsilon: float, gamma: float = 1/6) -> bool:
     """
     Algorithm 8: Reducing testing equality to a general distribution to testing equality to a O(n)-grained distribution.
 
     Parameters:
     p (np.ndarray): The original distribution p.
     q (np.ndarray): The original distribution q.
-    epsilon (float): The accuracy parameter.
-    n (int): The number of elements in the distributions.
+    epsilon (float): The error parameter.
 
     Returns:
     bool: True if the distributions are considered equal, False otherwise.
     """
-    gamma = 1/6
-
+    n = len(p)
+    
     # Step 1: Generate samples from p
     s = int(np.ceil(np.sqrt(n) / epsilon**2))
     samples = np.random.choice(range(n), size=s, p=p)
@@ -186,8 +192,59 @@ def algorithm_8(p: np.ndarray, q: np.ndarray, epsilon: float, n: int) -> bool:
     # Step 4: Transform samples from p' to p''
     p_grained_samples = transform_samples_to_grained(p_prime_samples, q_prime, q_grained)
 
-    # Step 5: Invoke the epsilon tester for uniformity
-    return epsilon_tester_uniformity(p_grained_samples, n + 1, epsilon / 3), p_grained_samples
+    return q_grained, p_grained_samples
+
+def algorithm_5(q_grained: Dict[str, float], p_grained_samples: List[int], gamma: float = 1/6):
+    n = len(q_grained)
+    m = int(n / gamma)
+    
+    m_i = np.zeros(n)
+    remaining = m
+    
+    # First allocate minimum positions to each used index
+    used_indices = set(p_grained_samples)
+    min_positions = remaining // len(used_indices)
+    for i in used_indices:
+        m_i[i] = min_positions
+        remaining -= min_positions
+    
+    # Distribute remaining based on q''
+    if remaining > 0:
+        weights = [q_grained[str(i)] for i in range(n)]
+        total_weight = sum(weights)
+        for i in range(n):
+            if i in used_indices:
+                additional = int((weights[i]/total_weight) * remaining)
+                m_i[i] += additional
+                remaining -= additional
+    
+    # Map samples using full range
+    ranges = []
+    current = 1
+    for size in m_i:
+        if size > 0:
+            ranges.append((current, current + size - 1))
+            current += size
+        else:
+            ranges.append((0, 0))
+    
+    mapped_samples = []
+    for s in p_grained_samples:
+        start, end = ranges[s]
+        if start > 0:
+            mapped = random.randint(start, end)
+            mapped_samples.append(mapped)
+            
+    return mapped_samples, m
+
+
+def goldreich_reduction(p: np.ndarray, q: np.ndarray, epsilon: float, gamma: float = 1/6) -> bool:
+    
+    q_grained, p_grained_samples = algorithm_8(p, q, epsilon)
+    
+    mapped_samples, m = algorithm_5(q_grained, p_grained_samples, gamma)
+    
+    return mapped_samples, m
 
 def main():
     """
@@ -195,50 +252,69 @@ def main():
     """
     n = 20
     epsilon = 0.1
+    
+    # Create results directory if it doesn't exist
+    results_dir = "results/goldreich_reduction"
+    os.makedirs(results_dir, exist_ok=True)
 
-    # Generate random distributions p and q
-    p = np.random.dirichlet(np.ones(n), size=1)[0]
-    q = np.random.dirichlet(np.ones(n), size=1)[0]
+    # Generate different types of distributions
+    distributions = {
+        'Far Exact': generate_far_exact_distribution(n),
+        'Bimodal': generate_bimodal_distribution(n),
+        'Normal': generate_normal_distribution(n),
+        'Exponential': generate_exponential_distribution(n)
+    }
 
-    # Test the reduction to O(n)-grained distributions
-    result, p_grained_samples = algorithm_8(p, q, epsilon, n)
+    for name, q in distributions.items():
+        print(f"\nTesting distribution: {name}")
+        
+        # Generate a random distribution p
+        p = np.random.dirichlet(np.ones(n), size=1)[0]
 
-    print(f"Reduction tester result: {'Accepted' if result else 'Rejected'}")
+        # Generate samples from p
+        s = int(np.ceil(np.sqrt(n) / epsilon**2))
+        p_samples = np.random.choice(range(n), size=s, p=p)
 
-    # Plot the distributions and samples
-    plt.figure(figsize=(12, 6))
+        # Get the grained Distributions
+        q_grained, p_grained_samples = algorithm_8(p, q, epsilon)
+        
+        # Test the Goldreich reduction
+        mapped_samples, m = goldreich_reduction(q, p_samples, epsilon)
+        result = epsilon_tester_uniformity(mapped_samples, m, epsilon)
 
-    plt.subplot(2, 2, 1)
-    plt.bar(range(n), p, color='blue', alpha=0.7)
-    plt.title("Original Distribution p")
-    plt.xlabel("Value")
-    plt.ylabel("Probability")
+        print(f"Reduction tester result for {name}: {'Accepted' if result else 'Rejected'}")
 
-    plt.subplot(2, 2, 2)
-    plt.bar(range(n), q, color='blue', alpha=0.7)
-    plt.title("Original Distribution q")
-    plt.xlabel("Value")
-    plt.ylabel("Probability")
+        # Plot the distributions and samples
+        plt.figure(figsize=(12, 6))
 
-    # Apply the reduction to O(n)-grained distributions
-    p_double_prime, q_double_prime = reduce_to_O_n_grained(p, q, 1/6, n)
+        plt.subplot(2, 2, 1)
+        plt.bar(range(n), p, color='blue', alpha=0.7)
+        plt.title(f"Original Distribution p for {name}")
+        plt.xlabel("Value")
+        plt.ylabel("Probability")
 
-    plt.subplot(2, 2, 3)
-    p_grained_counts = [p_grained_samples.count(i) for i in range(n + 1)]
-    p_grained_probabilities = [count / len(p_grained_samples) for count in p_grained_counts]
-    plt.bar(range(n + 1), p_grained_probabilities, color='blue', alpha=0.7)
-    plt.title("Reduced Distribution p''")
-    plt.xlabel("Value")
-    plt.ylabel("Probability")
+        plt.subplot(2, 2, 2)
+        plt.bar(range(n), q, color='blue', alpha=0.7)
+        plt.title(f"Original Distribution q for {name}")
+        plt.xlabel("Value")
+        plt.ylabel("Probability")
 
-    plt.subplot(2, 2, 4)
-    plt.bar(range(n + 1), [q_double_prime.get(str(i), 0.0) for i in range(n + 1)], color='blue', alpha=0.7)
-    plt.title("Reduced Distribution q''")
-    plt.xlabel("Value")
-    plt.ylabel("Probability")
+        plt.subplot(2, 2, 3)
+        plt.bar(range(n + 1), [p_grained_samples.count(i) for i in range(n + 1)], color='blue', alpha=0.7)
+        plt.title(f"Grained Samples p'' for {name}")
+        plt.xlabel("Value")
+        plt.ylabel("Frequency")
 
-    plt.tight_layout()
-    plt.show()
+        plt.subplot(2, 2, 4)
+        plt.bar(range(n + 1), [q_grained.get(str(i), 0.0) for i in range(n + 1)], color='blue', alpha=0.7)
+        plt.title(f"Grained Distribution q'' for {name}")
+        plt.xlabel("Value")
+        plt.ylabel("Probability")
+        plt.tight_layout()
+        plt.savefig(os.path.join(results_dir, f"{name}_reduction.png"))
+        plt.show()
+
 
 if __name__ == "__main__":
     main()
+
