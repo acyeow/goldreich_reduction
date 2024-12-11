@@ -1,94 +1,211 @@
-import random
+import numpy as np
 import math
+import random
+from typing import Dict, List, Tuple
+from scipy.stats import chi2
 import matplotlib.pyplot as plt
 
-def F_prime(i, n):
+def F_prime(samples: List[int], n: int) -> List[int]:
     """
     The filter F' that outputs i with probability 1/2, and the uniform distribution on [n] otherwise.
 
     Parameters:
-    i (int): The input value.
+    samples (List[int]): The input samples.
     n (int): The range of the uniform distribution [1, n].
 
     Returns:
-    int: The filtered value.
+    List[int]: The filtered values.
     """
-    if random.random() < 0.5:
-        return i
-    else:
-        return random.randint(1, n)
+    return [sample if random.random() < 0.5 else random.randint(0, n-1) for sample in samples]
 
-def F_double_prime_q_prime(i, q_prime, gamma, n):
+def mix_with_uniform(distribution: np.ndarray) -> Dict[str, float]:
     """
-    The filter F''_q' that outputs i with probability m_i * gamma / n, where m_i = floor(q'(i) * n / gamma),
-    and outputs n+1 otherwise.
+    Mixes the given distribution with a uniform distribution in a 50-50 ratio.
 
     Parameters:
-    i (int): The input value.
-    q_prime (list): The modified distribution q'.
-    gamma (float): The gamma parameter.
-    n (int): The range of the uniform distribution [1, n].
+    distribution (np.ndarray): The original distribution.
 
     Returns:
-    int: The filtered value.
+    Dict[str, float]: The mixed distribution.
     """
-    m_i = math.floor(q_prime[i] * n / gamma)
-    if random.random() < m_i * gamma / n:
-        return i
-    else:
-        return n + 1
+    n = len(distribution)
+    return {str(i): 0.5 * distribution[i] + 0.5 / n for i in range(n)}
 
-def reduce_to_O_n_grained(p, q, gamma, n):
+def create_grained_distribution(distribution: Dict[str, float], gamma: float = 1/6) -> Dict[str, float]:
+    """
+    Creates an m-grained distribution by flooring and redistributing the remaining mass.
+
+    Parameters:
+    distribution (Dict[str, float]): The input distribution.
+    gamma (float): The gamma parameter for quantization.
+
+    Returns:
+    Dict[str, float]: The quantized distribution.
+    """
+    n = len(distribution)
+    
+    # Floor values
+    grained_distribution = {}
+    total_mass = 0.0
+    
+    for i in range(n):
+        key = str(i)
+        m_i = math.floor(distribution[key] * n / gamma)
+        grained_distribution[key] = (m_i * gamma) / n
+        total_mass += grained_distribution[key]
+    
+    # Distribute remaining mass to largest remainders
+    remaining_mass = 1.0 - total_mass
+    if remaining_mass > 0:
+        remainders = [(i, distribution[str(i)] * n / gamma - math.floor(distribution[str(i)] * n / gamma)) 
+                      for i in range(n)]
+        remainders.sort(key=lambda x: x[1], reverse=True)
+        
+        units = int(remaining_mass * n / gamma)
+        for i in range(units):
+            if i < len(remainders):
+                idx = str(remainders[i][0])
+                grained_distribution[idx] += gamma / n
+    
+    # Ensure all keys are present in grained_distribution
+    for i in range(n + 1):
+        if str(i) not in grained_distribution:
+            grained_distribution[str(i)] = 0.0
+    
+    return grained_distribution
+
+def transform_samples_to_grained(p_prime_samples: List[int], q_prime: Dict[str, float], q_grained: Dict[str, float]) -> List[int]:
+    """
+    Transforms samples from p' to p'' using the ratio q''(i)/q'(i).
+
+    Parameters:
+    p_prime_samples (List[int]): Samples from the distribution p'.
+    q_prime (Dict[str, float]): The modified distribution q'.
+    q_grained (Dict[str, float]): The quantized distribution q''.
+    gamma (float): The gamma parameter for quantization.
+
+    Returns:
+    List[int]: The transformed samples.
+    """
+    p_grained_samples = []
+
+    for sample in p_prime_samples:
+        sample_str = str(sample)
+        if sample_str in q_prime and sample_str in q_grained:
+            q_p = q_prime[sample_str]
+            q_pp = q_grained[sample_str]
+
+            if q_p > 0:
+                keep_probability = q_pp / q_p
+
+                if random.random() < keep_probability:
+                    p_grained_samples.append(sample)
+
+    return p_grained_samples
+
+def epsilon_tester_uniformity(samples: List[int], m: int, epsilon: float) -> bool:
+    """
+    Epsilon tester for uniformity over [m].
+
+    Parameters:
+    samples (List[int]): List of samples.
+    m (int): The parameter m for uniformity.
+    epsilon (float): The accuracy parameter.
+
+    Returns:
+    bool: True if the samples are uniformly distributed, False otherwise.
+    """
+    expected_count = len(samples) / m
+    counts = [samples.count(i) for i in range(1, m + 1)]
+    chi_square_stat = sum((count - expected_count) ** 2 / expected_count for count in counts)
+    threshold = chi2.ppf(1 - epsilon, df=m - 1)
+    
+    # Print the decision threshold
+    print(f"Computed chi-square statistic: {chi_square_stat}")
+    print(f"Decision threshold: {threshold}")
+    
+    return chi_square_stat <= threshold
+
+def reduce_to_O_n_grained(p: np.ndarray, q: np.ndarray, gamma: float, n: int) -> Tuple[List[float], Dict[str, float]]:
     """
     Implement the algorithm proposed in the paper to reduce testing equality to a general distribution
     to testing equality to a O(n)-grained distribution.
 
     Parameters:
-    p (list): The original distribution p.
-    q (list): The original distribution q.
+    p (np.ndarray): The original distribution p.
+    q (np.ndarray): The original distribution q.
     gamma (float): The gamma parameter.
     n (int): The number of elements in the distributions.
 
     Returns:
-    tuple: The reduced distributions p'' and q''.
+    Tuple[List[float], Dict[str, float]]: The reduced distributions p'' and q''.
     """
-    # Step 1: Apply filter F'
+    # Step 1: Apply filter F' to p and q
     p_prime = [0.5 * p[i] + 0.5 / n for i in range(n)]
-    q_prime = [0.5 * q[i] + 0.5 / n for i in range(n)]
+    q_prime = mix_with_uniform(q)
 
     # Step 2: Apply filter F''_q'
-    p_double_prime = [0] * (n + 1)
-    q_double_prime = [0] * (n + 1)
+    p_double_prime = [0.0] * (n + 1)
+    q_double_prime = create_grained_distribution(q_prime, gamma)
 
     for i in range(n):
-        p_double_prime[i] = p_prime[i] * (math.floor(p_prime[i] * n / gamma)) * gamma / n
-        q_double_prime[i] = q_prime[i] * (math.floor(q_prime[i] * n / gamma)) * gamma / n
+        m_i = math.floor(q_prime[str(i)] * n / gamma)
+        if m_i > 0:
+            p_double_prime[i] = p_prime[i] * (m_i * gamma) / n
 
     p_double_prime[n] = 1 - sum(p_double_prime[:n])
-    q_double_prime[n] = 1 - sum(q_double_prime[:n])
 
     return p_double_prime, q_double_prime
 
+def algorithm_8(p: np.ndarray, q: np.ndarray, epsilon: float, n: int) -> bool:
+    """
+    Algorithm 8: Reducing testing equality to a general distribution to testing equality to a O(n)-grained distribution.
+
+    Parameters:
+    p (np.ndarray): The original distribution p.
+    q (np.ndarray): The original distribution q.
+    epsilon (float): The accuracy parameter.
+    n (int): The number of elements in the distributions.
+
+    Returns:
+    bool: True if the distributions are considered equal, False otherwise.
+    """
+    gamma = 1/6
+
+    # Step 1: Generate samples from p
+    s = int(np.ceil(np.sqrt(n) / epsilon**2))
+    samples = np.random.choice(range(n), size=s, p=p)
+
+    # Step 2: Apply filter F' to the samples
+    p_prime_samples = F_prime(samples, n)
+    q_prime = mix_with_uniform(q)
+
+    # Step 3: Create the grained distribution q''
+    q_grained = create_grained_distribution(q_prime, gamma)
+
+    # Step 4: Transform samples from p' to p''
+    p_grained_samples = transform_samples_to_grained(p_prime_samples, q_prime, q_grained)
+
+    # Step 5: Invoke the epsilon tester for uniformity
+    return epsilon_tester_uniformity(p_grained_samples, n + 1, epsilon / 3), p_grained_samples
+
 def main():
+    """
+    Main function to test the reduction algorithm.
+    """
     n = 20
-    gamma = 0.1
+    epsilon = 0.1
 
-    p = [random.random() for _ in range(n)]
-    q = [random.random() for _ in range(n)]
+    # Generate random distributions p and q
+    p = np.random.dirichlet(np.ones(n), size=1)[0]
+    q = np.random.dirichlet(np.ones(n), size=1)[0]
 
-    p = [p_i / sum(p) for p_i in p]
-    q = [q_i / sum(q) for q_i in q]
+    # Test the reduction to O(n)-grained distributions
+    result, p_grained_samples = algorithm_8(p, q, epsilon, n)
 
-    print("Original distributions:")
-    print("p:", p)
-    print("q:", q)
+    print(f"Reduction tester result: {'Accepted' if result else 'Rejected'}")
 
-    p_double_prime, q_double_prime = reduce_to_O_n_grained(p, q, gamma, n)
-
-    print("\nReduced distributions:")
-    print("p_double_prime:", p_double_prime)
-    print("q_double_prime:", q_double_prime)
-
+    # Plot the distributions and samples
     plt.figure(figsize=(12, 6))
 
     plt.subplot(2, 2, 1)
@@ -103,15 +220,20 @@ def main():
     plt.xlabel("Value")
     plt.ylabel("Probability")
 
+    # Apply the reduction to O(n)-grained distributions
+    p_double_prime, q_double_prime = reduce_to_O_n_grained(p, q, 1/6, n)
+
     plt.subplot(2, 2, 3)
-    plt.bar(range(n + 1), p_double_prime, color='green', alpha=0.7)
-    plt.title("Reduced Distribution p_double_prime")
+    p_grained_counts = [p_grained_samples.count(i) for i in range(n + 1)]
+    p_grained_probabilities = [count / len(p_grained_samples) for count in p_grained_counts]
+    plt.bar(range(n + 1), p_grained_probabilities, color='blue', alpha=0.7)
+    plt.title("Reduced Distribution p''")
     plt.xlabel("Value")
     plt.ylabel("Probability")
 
     plt.subplot(2, 2, 4)
-    plt.bar(range(n + 1), q_double_prime, color='green', alpha=0.7)
-    plt.title("Reduced Distribution q_double_prime")
+    plt.bar(range(n + 1), [q_double_prime.get(str(i), 0.0) for i in range(n + 1)], color='blue', alpha=0.7)
+    plt.title("Reduced Distribution q''")
     plt.xlabel("Value")
     plt.ylabel("Probability")
 
