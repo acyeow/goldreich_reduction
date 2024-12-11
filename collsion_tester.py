@@ -26,17 +26,22 @@ def collision_tester(p: np.ndarray, m: int, epsilon: float) -> bool:
     # Step 3: Accept if and only if C <= 1 + 0.01 * sqrt(n)
     return C <= 1 + 0.01 * epsilon**2 / len(p)
 
-def main():
-    n = 10
-    m = 100
-    epsilon = 0.1
+def test_collision_tester(p: np.ndarray, m: int, epsilon: float):
+    """
+    Test the collision tester with the given distribution p, number of samples, and epsilon value.
 
-    p = np.random.dirichlet(np.ones(n), size=1)[0]
-
+    Parameters:
+    p (np.ndarray): The distribution over [n] from which to draw samples.
+    m (int): The number of samples to draw.
+    epsilon (float): The error parameter.
+    """
+    # Run the collision tester
     result = collision_tester(p, m, epsilon)
 
     print(f"Collision tester result: {'Accepted' if result else 'Rejected'}")
 
+    # Plot the distribution p and the histogram of samples
+    n = len(p)
     plt.figure(figsize=(12, 6))
 
     plt.subplot(1, 2, 1)
@@ -55,6 +60,20 @@ def main():
 
     plt.tight_layout()
     plt.show()
+
+def main():
+    # Test with a variety of distributions
+    distributions = [
+        np.random.dirichlet(np.ones(10), size=1)[0],
+        np.random.dirichlet(np.ones(10) * 2, size=1)[0],
+        np.random.dirichlet(np.ones(10) * 3, size=1)[0]
+    ]
+    m = 100
+    epsilon = 0.1
+
+    for i, p in enumerate(distributions):
+        print(f"Testing distribution {i + 1}")
+        test_collision_tester(p, m, epsilon)
 
 if __name__ == "__main__":
     main()

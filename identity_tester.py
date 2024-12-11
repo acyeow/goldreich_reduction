@@ -46,18 +46,18 @@ def identity_tester(samples: List[int], q: Dict[int, float], epsilon: float) -> 
     
     return Z <= threshold
 
-def main():
-    q = {
-        0: 0.25,
-        1: 0.25,
-        2: 0.25,
-        3: 0.25
-    }
-    
+def test_identity_tester(q: Dict[int, float], num_samples: int, epsilon: float):
+    """
+    Test the identity tester with the given distribution q, number of samples, and epsilon value.
+
+    Parameters:
+    q (Dict[int, float]): Known distribution q represented as a dictionary mapping indices to probabilities.
+    num_samples (int): Number of samples to draw from the distribution.
+    epsilon (float): Accuracy parameter for the test.
+    """
     np.random.seed(42)
-    samples = np.random.choice(list(q.keys()), size=1000, p=list(q.values())).tolist()
+    samples = np.random.choice(list(q.keys()), size=num_samples, p=list(q.values())).tolist()
     
-    epsilon = 0.1
     result = identity_tester(samples, q, epsilon)
     
     print(f"Identity tester result: {'Accepted' if result else 'Rejected'}")
@@ -75,8 +75,6 @@ def main():
     plt.ylabel("Probability")
     
     plt.subplot(1, 2, 2)
-    # plt.hist(samples, bins=len(q), density=True, alpha=0.7, color='green', edgecolor='black')
-    # plt.title("Histogram of Generated Samples")
     plt.bar(sample_frequencies.keys(), sample_frequencies.values(), width=0.4, color='green', alpha=0.7)
     plt.title("Bar Plot of Generated Samples")
     plt.xlabel("Value")
@@ -84,8 +82,20 @@ def main():
     
     plt.tight_layout()
     plt.show()
-    
-    return result
+
+def main():
+    # Test with a variety of distributions
+    distributions = [
+        {0: 0.25, 1: 0.25, 2: 0.25, 3: 0.25},
+        {0: 0.1, 1: 0.2, 2: 0.3, 3: 0.4},
+        {0: 0.4, 1: 0.3, 2: 0.2, 3: 0.1}
+    ]
+    num_samples = 1000
+    epsilon = 0.1
+
+    for i, q in enumerate(distributions):
+        print(f"Testing distribution {i + 1}")
+        test_identity_tester(q, num_samples, epsilon)
 
 if __name__ == "__main__":
     main()
