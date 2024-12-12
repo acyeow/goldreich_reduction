@@ -1,16 +1,9 @@
 import numpy as np
-import os
 import math
 import random
 from typing import Dict, List, Tuple
 from scipy.stats import chi2
-import matplotlib.pyplot as plt
-from generate_test_distributions import (
-    generate_far_exact_distribution,
-    generate_bimodal_distribution,
-    generate_normal_distribution,
-    generate_exponential_distribution
-)
+
 
 def F_prime(samples: List[int], n: int) -> List[int]:
     """
@@ -36,7 +29,13 @@ def mix_with_uniform(distribution: np.ndarray) -> Dict[str, float]:
     Dict[str, float]: The mixed distribution.
     """
     n = len(distribution)
-    return {str(i): 0.5 * distribution[i] + 0.5 / n for i in range(n)}
+    mixed_distribution = {}
+    uniform_prob = 0.5 / n
+
+    for i in range(n):
+        mixed_distribution[str(i)] = 0.5 * distribution[i] + uniform_prob
+
+    return mixed_distribution
 
 def create_grained_distribution(distribution: Dict[str, float], gamma: float = 1/6) -> Dict[str, float]:
     """
@@ -49,36 +48,34 @@ def create_grained_distribution(distribution: Dict[str, float], gamma: float = 1
     Returns:
     Dict[str, float]: The quantized distribution.
     """
-    n = len(distribution)
-    
-    # Floor values
+    num_elements = len(distribution)
     grained_distribution = {}
-    total_mass = 0.0
-    
-    for i in range(n):
+    total_grained_mass = 0.0
+
+    # Floor values and calculate total grained mass
+    for i in range(num_elements):
         key = str(i)
-        m_i = math.floor(distribution[key] * n / gamma)
-        grained_distribution[key] = (m_i * gamma) / n
-        total_mass += grained_distribution[key]
-    
-    # Distribute remaining mass to largest remainders
-    remaining_mass = 1.0 - total_mass
+        floored_value = math.floor(distribution[key] * num_elements / gamma)
+        grained_distribution[key] = (floored_value * gamma) / num_elements
+        total_grained_mass += grained_distribution[key]
+
+    # Distribute remaining probablity mass
+    remaining_mass = 1.0 - total_grained_mass
     if remaining_mass > 0:
-        remainders = [(i, distribution[str(i)] * n / gamma - math.floor(distribution[str(i)] * n / gamma)) 
-                      for i in range(n)]
-        remainders.sort(key=lambda x: x[1], reverse=True)
-        
-        units = int(remaining_mass * n / gamma)
-        for i in range(units):
+        remainders = sorted(
+            ((i, distribution[str(i)] * num_elements / gamma - math.floor(distribution[str(i)] * num_elements / gamma)) for i in range(num_elements)),
+            key=lambda x: x[1], reverse=True
+        )
+        units_to_distribute = int(remaining_mass * num_elements / gamma)
+        for i in range(units_to_distribute):
             if i < len(remainders):
                 idx = str(remainders[i][0])
-                grained_distribution[idx] += gamma / n
-    
-    # Ensure all keys are present in grained_distribution
-    for i in range(n + 1):
-        if str(i) not in grained_distribution:
-            grained_distribution[str(i)] = 0.0
-    
+                grained_distribution[idx] += gamma / num_elements
+
+    # Ensure all keys are present in the grained_distribution
+    for i in range(num_elements + 1):
+        grained_distribution.setdefault(str(i), 0.0)
+
     return grained_distribution
 
 def transform_samples_to_grained(p_prime_samples: List[int], q_prime: Dict[str, float], q_grained: Dict[str, float]) -> List[int]:
@@ -89,31 +86,27 @@ def transform_samples_to_grained(p_prime_samples: List[int], q_prime: Dict[str, 
     p_prime_samples (List[int]): Samples from the distribution p'.
     q_prime (Dict[str, float]): The modified distribution q'.
     q_grained (Dict[str, float]): The quantized distribution q''.
-    gamma (float): The gamma parameter for quantization.
 
     Returns:
     List[int]: The transformed samples.
     """
-    p_grained_samples = []
+    transformed_samples = []
 
     for sample in p_prime_samples:
-        sample_str = str(sample)
-        if sample_str in q_prime and sample_str in q_grained:
-            q_p = q_prime[sample_str]
-            q_pp = q_grained[sample_str]
+        sample_key = str(sample)
+        q_prime_value = q_prime.get(sample_key, 0)
+        q_grained_value = q_grained.get(sample_key, 0)
 
-            if q_p > 0:
-                keep_probability = q_pp / q_p
+        if q_prime_value > 0:
+            acceptance_probability = q_grained_value / q_prime_value
+            if random.random() < acceptance_probability:
+                transformed_samples.append(sample)
 
-                if random.random() < keep_probability:
-                    p_grained_samples.append(sample)
-
-    return p_grained_samples
+    return transformed_samples
 
 def reduce_to_O_n_grained(p: np.ndarray, q: Dict[str, float], gamma: float, n: int) -> Tuple[List[float], Dict[str, float]]:
     """
-    Implement the algorithm proposed in the paper to reduce testing equality to a general distribution
-    to testing equality to a O(n)-grained distribution.
+    Reduces testing equality to a general distribution to testing equality to a O(n)-grained distribution.
 
     Parameters:
     p (np.ndarray): The original distribution p.
@@ -124,22 +117,19 @@ def reduce_to_O_n_grained(p: np.ndarray, q: Dict[str, float], gamma: float, n: i
     Returns:
     Tuple[List[float], Dict[str, float]]: The reduced distributions p'' and q''.
     """
-    # Step 1: Apply filter F' to p and q
-    p_prime = [0.5 * p[i] + 0.5 / n for i in range(n)]
+    # Step 1: Apply filter F' to p
+    p_prime = F_prime(list(range(n)), n)
+    
+    # Step 2: Mix q with uniform distribution
     q_prime = mix_with_uniform(q)
-
-    # Step 2: Apply filter F''_q'
-    p_double_prime = [0.0] * (n + 1)
-    q_double_prime = create_grained_distribution(q_prime, gamma)
-
-    for i in range(n):
-        m_i = math.floor(q_prime[str(i)] * n / gamma)
-        if m_i > 0:
-            p_double_prime[i] = p_prime[i] * (m_i * gamma) / n
-
-    p_double_prime[n] = 1 - sum(p_double_prime[:n])
-
-    return p_double_prime, q_double_prime
+    
+    # Step 3: Create the grained distribution q''
+    q_grained = create_grained_distribution(q_prime, gamma)
+    
+    # Step 4: Transform p' to p''
+    p_double_prime = transform_samples_to_grained(p_prime, q_prime, q_grained)
+    
+    return p_double_prime, q_grained
 
 def epsilon_tester_uniformity(samples: List[int], m: int, epsilon: float) -> bool:
     """
@@ -154,8 +144,8 @@ def epsilon_tester_uniformity(samples: List[int], m: int, epsilon: float) -> boo
     bool: True if the samples are uniformly distributed, False otherwise.
     """
     expected_count = len(samples) / m
-    counts = [samples.count(i) for i in range(1, m + 1)]
-    chi_square_stat = sum((count - expected_count) ** 2 / expected_count for count in counts)
+    counts = np.bincount(samples, minlength=m+1)[1:]  # Count occurrences of each sample
+    chi_square_stat = np.sum((counts - expected_count) ** 2 / expected_count)
     threshold = chi2.ppf(1 - epsilon, df=m - 1)
     
     # Print the decision threshold
@@ -164,7 +154,7 @@ def epsilon_tester_uniformity(samples: List[int], m: int, epsilon: float) -> boo
     
     return chi_square_stat <= threshold
 
-def algorithm_8(p: np.ndarray, q: np.ndarray, epsilon: float, gamma: float = 1/6) -> bool:
+def algorithm_8(p: np.ndarray, q: np.ndarray, epsilon: float, gamma: float = 1/6) -> Tuple[Dict[str, float], List[int]]:
     """
     Algorithm 8: Reducing testing equality to a general distribution to testing equality to a O(n)-grained distribution.
 
@@ -172,9 +162,10 @@ def algorithm_8(p: np.ndarray, q: np.ndarray, epsilon: float, gamma: float = 1/6
     p (np.ndarray): The original distribution p.
     q (np.ndarray): The original distribution q.
     epsilon (float): The error parameter.
+    gamma (float): The gamma parameter for quantization.
 
     Returns:
-    bool: True if the distributions are considered equal, False otherwise.
+    Tuple[Dict[str, float], List[int]]: The grained distribution q'' and the transformed samples p''.
     """
     n = len(p)
     
@@ -184,65 +175,91 @@ def algorithm_8(p: np.ndarray, q: np.ndarray, epsilon: float, gamma: float = 1/6
 
     # Step 2: Apply filter F' to the samples
     p_prime_samples = F_prime(samples, n)
+    
+    # Step 3: Mix q with uniform distribution
     q_prime = mix_with_uniform(q)
 
-    # Step 3: Create the grained distribution q''
+    # Step 4: Create the grained distribution q''
     q_grained = create_grained_distribution(q_prime, gamma)
 
-    # Step 4: Transform samples from p' to p''
+    # Step 5: Transform samples from p' to p''
     p_grained_samples = transform_samples_to_grained(p_prime_samples, q_prime, q_grained)
 
     return q_grained, p_grained_samples
 
-def algorithm_5(q_grained: Dict[str, float], p_grained_samples: List[int], gamma: float = 1/6):
-    n = len(q_grained)
-    m = int(n / gamma)
+def algorithm_5(q_grained: Dict[str, float], p_grained_samples: List[int], gamma: float = 1/6) -> Tuple[List[int], int]:
+    """
+    Distributes positions among elements based on their weights and maps samples to these positions.
+    Args:
+        q_grained (Dict[str, float]): A dictionary where keys are element indices (as strings) and values are their corresponding weights.
+        p_grained_samples (List[int]): A list of sample indices to be mapped to positions.
+        gamma (float, optional): A parameter that determines the total number of positions. Default is 1/6.
+    Returns:
+        Tuple[List[int], int]: A tuple containing:
+            - A list of mapped sample positions.
+            - The total number of positions allocated.
+    """
+    num_elements = len(q_grained)
+    total_positions = int(num_elements / gamma)
     
-    m_i = np.zeros(n)
-    remaining = m
+    # Initialize position allocation array
+    position_allocation = np.zeros(num_elements)
+    remaining_positions = total_positions
     
-    # First allocate minimum positions to each used index
-    used_indices = set(p_grained_samples)
-    min_positions = remaining // len(used_indices)
-    for i in used_indices:
-        m_i[i] = min_positions
-        remaining -= min_positions
+    # Allocate minimum positions to each used index
+    unique_samples = set(p_grained_samples)
+    min_positions_per_index = remaining_positions // len(unique_samples)
+    for index in unique_samples:
+        position_allocation[int(index)] = min_positions_per_index
+        remaining_positions -= min_positions_per_index
     
-    # Distribute remaining based on q''
-    if remaining > 0:
-        weights = [q_grained[str(i)] for i in range(n)]
-        total_weight = sum(weights)
-        for i in range(n):
-            if i in used_indices:
-                additional = int((weights[i]/total_weight) * remaining)
-                m_i[i] += additional
-                remaining -= additional
+    # Distribute remaining positions based on q_grained
+    if remaining_positions > 0:
+        weights = np.array([q_grained[str(i)] for i in range(num_elements)])
+        total_weight = np.sum(weights)
+        for i in range(num_elements):
+            if i in unique_samples:
+                additional_positions = int((weights[i] / total_weight) * remaining_positions)
+                position_allocation[i] += additional_positions
+                remaining_positions -= additional_positions
     
-    # Map samples using full range
-    ranges = []
-    current = 1
-    for size in m_i:
-        if size > 0:
-            ranges.append((current, current + size - 1))
-            current += size
+    # Create ranges for mapping samples
+    sample_ranges = []
+    current_position = 1
+    for allocation in position_allocation:
+        if allocation > 0:
+            sample_ranges.append((current_position, current_position + int(allocation) - 1))
+            current_position += int(allocation)
         else:
-            ranges.append((0, 0))
+            sample_ranges.append((0, 0))
     
+    # Map samples to the full range
     mapped_samples = []
-    for s in p_grained_samples:
-        start, end = ranges[s]
+    for sample in p_grained_samples:
+        start, end = sample_ranges[sample]
         if start > 0:
-            mapped = random.randint(start, end)
-            mapped_samples.append(mapped)
+            mapped_samples.append(random.randint(start, end))
             
-    return mapped_samples, m
+    return mapped_samples, total_positions
 
 
 def goldreich_reduction(p: np.ndarray, q: np.ndarray, epsilon: float, gamma: float = 1/6) -> bool:
+    """
+    Performs the Goldreich reduction algorithm to test uniformity of a distribution.
+    This function applies the Goldreich reduction to test whether the distribution `p` is 
+    epsilon-close to the uniform distribution over the domain defined by `q`. It uses 
+    auxiliary algorithms (algorithm_8 and algorithm_5) to achieve this.
+    Parameters:
+    p (np.ndarray): The distribution to be tested.
+    q (np.ndarray): The reference distribution.
+    epsilon (float): The closeness parameter for the uniformity test.
+    gamma (float, optional): The parameter for the reduction algorithm. Default is 1/6.
+    Returns:
+    bool: True if the distribution `p` is epsilon-close to the uniform distribution, False otherwise.
+    """
     
     q_grained, p_grained_samples = algorithm_8(p, q, epsilon)
     
     mapped_samples, m = algorithm_5(q_grained, p_grained_samples, gamma)
     
-    return mapped_samples, m
-
+    return epsilon_tester_uniformity(mapped_samples, m, epsilon)
