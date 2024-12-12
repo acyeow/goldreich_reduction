@@ -31,8 +31,8 @@ def collision_tester(p: np.ndarray, m: int, epsilon: float) -> bool:
 
     # Step 3: Accept if and only if C ≤ 1 + ε^2 / m
     threshold = 1 + epsilon**2 / len(p)
-    print(f"Computed C value: {C}")
-    print(f"Decision threshold: {threshold}")
+    #print(f"Computed C value: {C}")
+    #print(f"Decision threshold: {threshold}")
     return C <= threshold
 
 def test_collision_tester(p: np.ndarray, m: int, epsilon: float, dist_name: str):
@@ -48,7 +48,7 @@ def test_collision_tester(p: np.ndarray, m: int, epsilon: float, dist_name: str)
     # Run the collision tester
     result = collision_tester(p, m, epsilon)
 
-    print(f"Collision tester result for {dist_name} with {m} samples: {'Accepted' if result else 'Rejected'}")
+    #print(f"Collision tester result for {dist_name} with {m} samples: {'Accepted' if result else 'Rejected'}")
 
     # Calculate the frequency of each sample
     samples = np.random.choice(len(p), size=m, replace=True, p=p)
@@ -125,7 +125,8 @@ def main():
     plt.xlabel('Sample Size')
     plt.ylabel('Distribution Type')
     plt.title('Collision Tester Results')
-    plt.savefig("results/collision_tester/collision_tester_results_matrix.png")
+    # plt.savefig("results/collision_tester/collision_tester_results_matrix.png")
+    plt.show()
     plt.close()
 
 if __name__ == "__main__":

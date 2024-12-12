@@ -52,8 +52,8 @@ def identity_tester(samples: List[int], q: Dict[int, float], epsilon: float) -> 
     decision_threshold = (m * epsilon ** 2) / 10
     
     # Debugging print statements
-    print(f"Computed Z value: {Z}")
-    print(f"Decision threshold: {decision_threshold}")
+    #print(f"Computed Z value: {Z}")
+    #print(f"Decision threshold: {decision_threshold}")
     
     return Z <= decision_threshold
 
@@ -75,14 +75,14 @@ def test_identity_tester(q: Dict[int, float], num_samples: int, epsilon: float, 
     
     result = identity_tester(samples, q, epsilon)
     
-    print(f"Identity tester result for {dist_name} with {num_samples} samples: {'Accepted' if result else 'Rejected'}")
+    #print(f"Identity tester result for {dist_name} with {num_samples} samples: {'Accepted' if result else 'Rejected'}")
     
     # Calculate the frequency of each sample
     sample_counts = {i: samples.count(i) for i in q.keys()}
     sample_frequencies = {i: count / len(samples) for i, count in sample_counts.items()}
     
     # Create results directory if it doesn't exist
-    os.makedirs("results/identity_tester", exist_ok=True)
+    # os.makedirs("results/identity_tester", exist_ok=True)
     
     # Save the distribution and sample frequencies plot
     plt.figure(figsize=(12, 6))
@@ -100,7 +100,8 @@ def test_identity_tester(q: Dict[int, float], num_samples: int, epsilon: float, 
     plt.ylabel("Frequency")
     
     plt.tight_layout()
-    plt.savefig(f"results/identity_tester/{dist_name}_{num_samples}_samples.png")
+    # plt.savefig(f"results/identity_tester/{dist_name}_{num_samples}_samples.png")
+    # plt.show()
     plt.close()
     
     return result
